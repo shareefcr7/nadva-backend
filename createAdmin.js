@@ -65,7 +65,7 @@ const seedAdmin = async () => {
 
     const adminUser = new User({
       email: adminEmail,
-      password: 'password123',
+      password: 'PASSWORD#123',
       firstName: 'Super',
       lastName: 'Admin',
       role: ROLES.Admin
