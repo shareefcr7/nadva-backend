@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { faker } = require('@faker-js/faker');
 
-const setupDB = require('./db');
+const { setupDB } = require('./db');
 const { ROLES } = require('../constants');
 const User = require('../models/user');
 const Brand = require('../models/brand');

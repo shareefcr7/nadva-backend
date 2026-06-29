@@ -104,21 +104,32 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
     const updatedVariants = [];
 
     for (const v of variants) {
-      let imageUrl = v.image;
+      let uploadedImages = [];
 
-      if (v.image) {
-        const upload = await cloudinary.uploader.upload(v.image, {
-          folder: 'products'
-        });
-
-        imageUrl = upload.secure_url;
+      if (v.images && Array.isArray(v.images)) {
+        for (const img of v.images) {
+          if (img && img.startsWith('data:image')) {
+            const upload = await cloudinary.uploader.upload(img, { folder: 'products' });
+            uploadedImages.push(upload.secure_url);
+          } else if (img) {
+            uploadedImages.push(img); // already a URL
+          }
+        }
       }
 
       updatedVariants.push({
-        ...v,
-        image: imageUrl
+        color: v.color,
+        price: Number(v.price),
+        stock: Number(v.stock) || 0,
+        sizes: v.sizes || [],
+        isDefault: v.isDefault || false,
+        images: uploadedImages
       });
     }
+
+    // Ensure exactly one default variant
+    const defaultCount = updatedVariants.filter(v => v.isDefault).length;
+    if (defaultCount === 0) updatedVariants[0].isDefault = true;
 
     const product = new Product({
       name,
@@ -151,6 +162,9 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
 
     if (variants) {
       const colors = variants.map(v => v.color?.toLowerCase());
+      if (colors.some(c => !c)) {
+        return res.status(400).json({ error: 'Each variant must have a color.' });
+      }
       if (new Set(colors).size !== colors.length) {
         return res.status(400).json({ error: 'Each variant must have a unique color.' });
       }
@@ -165,37 +179,44 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
     if (description !== undefined) product.description = description;
     if (category !== undefined) product.category = category || null;
     if (isActive !== undefined) product.isActive = isActive;
-    // if (variants !== undefined) product.variants = variants;
+
     if (variants !== undefined) {
-  const updatedVariants = [];
+      const updatedVariants = [];
 
-  for (const v of variants) {
-    let imageUrl = v.image;
+      for (const v of variants) {
+        let uploadedImages = [];
 
-    // ✅ If new image (base64), upload to Cloudinary
-    if (v.image && v.image.startsWith('data:image')) {
-      const upload = await cloudinary.uploader.upload(v.image, {
-        folder: 'products'
-      });
+        if (v.images && Array.isArray(v.images)) {
+          for (const img of v.images) {
+            if (img && img.startsWith('data:image')) {
+              // New base64 image → upload to Cloudinary
+              const upload = await cloudinary.uploader.upload(img, { folder: 'products' });
+              uploadedImages.push(upload.secure_url);
+            } else if (img) {
+              uploadedImages.push(img); // already a Cloudinary URL
+            }
+          }
+        }
 
-      imageUrl = upload.secure_url;
+        updatedVariants.push({
+          color: v.color,
+          price: Number(v.price),
+          stock: Number(v.stock) || 0,
+          sizes: v.sizes || [],
+          isDefault: v.isDefault || false,
+          images: uploadedImages
+        });
+      }
+
+      product.variants = updatedVariants;
     }
 
-    // ✅ If already URL, keep as it is
-    updatedVariants.push({
-      ...v,
-      image: imageUrl
-    });
-  }
-
-  product.variants = updatedVariants;
-}
     product.updated = new Date();
-
     const updated = await product.save();
 
     res.status(200).json({ success: true, message: 'Product updated successfully!', product: updated });
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: 'Your request could not be processed. Please try again.' });
   }
 });

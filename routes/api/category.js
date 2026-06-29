@@ -101,24 +101,25 @@ router.put('/:id', auth, role.check(ROLES.Admin), async (req, res) => {
   try {
     const categoryId = req.params.id;
     const update = req.body.category;
-    const query = { _id: categoryId };
-    const { slug } = req.body.category;
 
-    const foundCategory = await Category.findOne({
-      $or: [{ slug }]
-    });
-
-    if (foundCategory && foundCategory._id != categoryId) {
-      return res.status(400).json({ error: 'Slug is already in use.' });
+    if (!update) {
+      return res.status(400).json({ error: 'No update data provided.' });
     }
 
-    await Category.findOneAndUpdate(query, update, {
-      new: true
-    });
+    const updated = await Category.findOneAndUpdate(
+      { _id: categoryId },
+      { $set: update },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Category not found.' });
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Category has been updated successfully!'
+      message: 'Category has been updated successfully!',
+      category: updated
     });
   } catch (error) {
     res.status(400).json({
