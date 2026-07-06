@@ -90,7 +90,7 @@ router.get('/item/:slug', async (req, res) => {
 
 router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member), async (req, res) => {
   try {
-    const { name, description, category, variants } = req.body;
+    const { name, description, category, variants, amenities } = req.body;
 
     if (!name || !description) {
       return res.status(400).json({ error: 'Name and description are required.' });
@@ -98,6 +98,19 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
 
     if (!variants || !Array.isArray(variants) || variants.length === 0) {
       return res.status(400).json({ error: 'At least one variant is required.' });
+    }
+
+    // Validate variant names
+    const variantNames = variants.map(v => v.name?.trim().toLowerCase());
+    if (variantNames.some(n => !n)) {
+      return res.status(400).json({ error: 'Each variant must have a name.' });
+    }
+    if (new Set(variantNames).size !== variantNames.length) {
+      return res.status(400).json({ error: 'Each variant must have a unique name.' });
+    }
+
+    for (const v of variants) {
+      if (!v.price || Number(v.price) <= 0) return res.status(400).json({ error: 'Each variant price must be greater than 0.' });
     }
 
     // Upload images to Cloudinary
@@ -118,12 +131,17 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
       }
 
       updatedVariants.push({
-        color: v.color,
+        name: v.name,
+        color: v.name, // Keep matching color for backward compatibility/legacy clients
         price: Number(v.price),
-        stock: Number(v.stock) || 0,
-        sizes: v.sizes || [],
+        description: v.description || '',
         isDefault: v.isDefault || false,
-        images: uploadedImages
+        images: uploadedImages,
+        duration: v.duration || '',
+        capacity: v.capacity || '',
+        maxGuests: v.maxGuests || '',
+        roomType: v.roomType || '',
+        serviceType: v.serviceType || ''
       });
     }
 
@@ -135,6 +153,7 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
       name,
       description,
       category: category || null,
+      amenities: amenities || [],
       variants: updatedVariants
     });
 
@@ -158,15 +177,15 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
 // PUT update product
 router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member), async (req, res) => {
   try {
-    const { name, description, category, variants, isActive } = req.body;
+    const { name, description, category, variants, isActive, amenities } = req.body;
 
     if (variants) {
-      const colors = variants.map(v => v.color?.toLowerCase());
-      if (colors.some(c => !c)) {
-        return res.status(400).json({ error: 'Each variant must have a color.' });
+      const variantNames = variants.map(v => v.name?.trim().toLowerCase());
+      if (variantNames.some(n => !n)) {
+        return res.status(400).json({ error: 'Each variant must have a name.' });
       }
-      if (new Set(colors).size !== colors.length) {
-        return res.status(400).json({ error: 'Each variant must have a unique color.' });
+      if (new Set(variantNames).size !== variantNames.length) {
+        return res.status(400).json({ error: 'Each variant must have a unique name.' });
       }
       const defaultCount = variants.filter(v => v.isDefault).length;
       if (defaultCount === 0) variants[0].isDefault = true;
@@ -179,6 +198,7 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
     if (description !== undefined) product.description = description;
     if (category !== undefined) product.category = category || null;
     if (isActive !== undefined) product.isActive = isActive;
+    if (amenities !== undefined) product.amenities = amenities || [];
 
     if (variants !== undefined) {
       const updatedVariants = [];
@@ -199,12 +219,17 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
         }
 
         updatedVariants.push({
-          color: v.color,
+          name: v.name,
+          color: v.name, // Keep matching color for backward compatibility/legacy clients
           price: Number(v.price),
-          stock: Number(v.stock) || 0,
-          sizes: v.sizes || [],
+          description: v.description || '',
           isDefault: v.isDefault || false,
-          images: uploadedImages
+          images: uploadedImages,
+          duration: v.duration || '',
+          capacity: v.capacity || '',
+          maxGuests: v.maxGuests || '',
+          roomType: v.roomType || '',
+          serviceType: v.serviceType || ''
         });
       }
 
@@ -212,7 +237,7 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
     }
 
     product.updated = new Date();
-    const updated = await product.save();
+    const updated = await (await product.save()).populate('category', 'name');
 
     res.status(200).json({ success: true, message: 'Product updated successfully!', product: updated });
   } catch (error) {

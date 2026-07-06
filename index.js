@@ -36,6 +36,33 @@ setupDB().then(async () => {
     await admin.save();
     console.log('Admin user password forcefully updated to PASSWORD#123.');
   }
+
+  // Automatic variant migration: Copy legacy color field values into variant name
+  try {
+    const Product = require('./models/product');
+    const products = await Product.find({});
+    let totalMigrated = 0;
+    for (const p of products) {
+      let changed = false;
+      if (p.variants && Array.isArray(p.variants)) {
+        p.variants.forEach(v => {
+          if (v.color && !v.name) {
+            v.name = v.color;
+            changed = true;
+          }
+        });
+      }
+      if (changed) {
+        await p.save();
+        totalMigrated++;
+      }
+    }
+    if (totalMigrated > 0) {
+      console.log(`Migrated ${totalMigrated} products from color to variant name.`);
+    }
+  } catch (err) {
+    console.error('Error running color-to-name migration:', err);
+  }
 });
 require('./config/passport')(app);
 app.use(routes);
