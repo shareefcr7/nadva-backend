@@ -90,33 +90,41 @@ router.get('/item/:slug', async (req, res) => {
 
 router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member), async (req, res) => {
   try {
-    const { name, description, category, variants, amenities } = req.body;
+    const { name, description, category, variants, amenities, price, images } = req.body;
 
     if (!name || !description) {
       return res.status(400).json({ error: 'Name and description are required.' });
     }
 
-    if (!variants || !Array.isArray(variants) || variants.length === 0) {
-      return res.status(400).json({ error: 'At least one variant is required.' });
+    let inputVariants = [];
+    if (variants && Array.isArray(variants) && variants.length > 0) {
+      inputVariants = variants;
+    } else {
+      inputVariants = [{
+        name: 'Default',
+        price: price !== undefined ? Number(price) : 0,
+        description: '',
+        isDefault: true,
+        images: images || []
+      }];
     }
 
-    // Validate variant names
-    const variantNames = variants.map(v => v.name?.trim().toLowerCase());
-    if (variantNames.some(n => !n)) {
-      return res.status(400).json({ error: 'Each variant must have a name.' });
-    }
+    // Validate variant names and prices
+    const variantNames = inputVariants.map(v => (v.name || 'Default').trim().toLowerCase());
     if (new Set(variantNames).size !== variantNames.length) {
       return res.status(400).json({ error: 'Each variant must have a unique name.' });
     }
 
-    for (const v of variants) {
-      if (!v.price || Number(v.price) <= 0) return res.status(400).json({ error: 'Each variant price must be greater than 0.' });
+    for (const v of inputVariants) {
+      if (v.price !== undefined && (isNaN(Number(v.price)) || Number(v.price) < 0)) {
+        return res.status(400).json({ error: 'Variant price must be a valid non-negative number.' });
+      }
     }
 
     // Upload images to Cloudinary
     const updatedVariants = [];
 
-    for (const v of variants) {
+    for (const v of inputVariants) {
       let uploadedImages = [];
 
       if (v.images && Array.isArray(v.images)) {
@@ -131,9 +139,9 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
       }
 
       updatedVariants.push({
-        name: v.name,
-        color: v.name, // Keep matching color for backward compatibility/legacy clients
-        price: Number(v.price),
+        name: v.name || 'Default',
+        color: v.name || 'Default', // Keep matching color for backward compatibility/legacy clients
+        price: Number(v.price) || 0,
         description: v.description || '',
         isDefault: v.isDefault || false,
         images: uploadedImages,
@@ -147,7 +155,9 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
 
     // Ensure exactly one default variant
     const defaultCount = updatedVariants.filter(v => v.isDefault).length;
-    if (defaultCount === 0) updatedVariants[0].isDefault = true;
+    if (defaultCount === 0 && updatedVariants.length > 0) {
+      updatedVariants[0].isDefault = true;
+    }
 
     const product = new Product({
       name,
@@ -174,21 +184,36 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
     res.status(400).json({ error: 'Your request could not be processed. Please try again.' });
   }
 });
+
 // PUT update product
 router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member), async (req, res) => {
   try {
-    const { name, description, category, variants, isActive, amenities } = req.body;
+    const { name, description, category, variants, isActive, amenities, price, images } = req.body;
 
-    if (variants) {
-      const variantNames = variants.map(v => v.name?.trim().toLowerCase());
-      if (variantNames.some(n => !n)) {
-        return res.status(400).json({ error: 'Each variant must have a name.' });
+    let inputVariants = undefined;
+    if (variants !== undefined) {
+      if (Array.isArray(variants) && variants.length > 0) {
+        inputVariants = variants;
+      } else {
+        inputVariants = [{
+          name: 'Default',
+          price: price !== undefined ? Number(price) : 0,
+          description: '',
+          isDefault: true,
+          images: images || []
+        }];
       }
+
+      const variantNames = inputVariants.map(v => (v.name || 'Default').trim().toLowerCase());
       if (new Set(variantNames).size !== variantNames.length) {
         return res.status(400).json({ error: 'Each variant must have a unique name.' });
       }
-      const defaultCount = variants.filter(v => v.isDefault).length;
-      if (defaultCount === 0) variants[0].isDefault = true;
+
+      for (const v of inputVariants) {
+        if (v.price !== undefined && (isNaN(Number(v.price)) || Number(v.price) < 0)) {
+          return res.status(400).json({ error: 'Variant price must be a valid non-negative number.' });
+        }
+      }
     }
 
     const product = await Product.findById(req.params.id);
@@ -200,10 +225,10 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
     if (isActive !== undefined) product.isActive = isActive;
     if (amenities !== undefined) product.amenities = amenities || [];
 
-    if (variants !== undefined) {
+    if (inputVariants !== undefined) {
       const updatedVariants = [];
 
-      for (const v of variants) {
+      for (const v of inputVariants) {
         let uploadedImages = [];
 
         if (v.images && Array.isArray(v.images)) {
@@ -219,9 +244,9 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
         }
 
         updatedVariants.push({
-          name: v.name,
-          color: v.name, // Keep matching color for backward compatibility/legacy clients
-          price: Number(v.price),
+          name: v.name || 'Default',
+          color: v.name || 'Default', // Keep matching color for backward compatibility/legacy clients
+          price: Number(v.price) || 0,
           description: v.description || '',
           isDefault: v.isDefault || false,
           images: uploadedImages,
@@ -231,6 +256,11 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
           roomType: v.roomType || '',
           serviceType: v.serviceType || ''
         });
+      }
+
+      const defaultCount = updatedVariants.filter(v => v.isDefault).length;
+      if (defaultCount === 0 && updatedVariants.length > 0) {
+        updatedVariants[0].isDefault = true;
       }
 
       product.variants = updatedVariants;
