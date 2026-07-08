@@ -109,10 +109,10 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
       }];
     }
 
-    // Validate variant names and prices
-    const variantNames = inputVariants.map(v => (v.name || 'Default').trim().toLowerCase());
+    // Validate variant names/colors and prices
+    const variantNames = inputVariants.map((v, index) => (v.color || v.name || (inputVariants.length === 1 ? 'Default' : `Option ${index + 1}`)).trim().toLowerCase());
     if (new Set(variantNames).size !== variantNames.length) {
-      return res.status(400).json({ error: 'Each variant must have a unique name.' });
+      return res.status(400).json({ error: 'Each variant must have a unique name/flavour.' });
     }
 
     for (const v of inputVariants) {
@@ -124,7 +124,8 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
     // Upload images to Cloudinary
     const updatedVariants = [];
 
-    for (const v of inputVariants) {
+    for (let index = 0; index < inputVariants.length; index++) {
+      const v = inputVariants[index];
       let uploadedImages = [];
 
       if (v.images && Array.isArray(v.images)) {
@@ -138,10 +139,17 @@ router.post('/add', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Member),
         }
       }
 
+      const optionName = v.color || (inputVariants.length === 1 ? 'Default' : `Option ${index + 1}`);
       updatedVariants.push({
-        name: v.name || 'Default',
-        color: v.name || 'Default', // Keep matching color for backward compatibility/legacy clients
+        name: optionName,
+        color: optionName,
         price: Number(v.price) || 0,
+        stock: Number(v.stock) || 0,
+        sizes: Array.isArray(v.sizes) ? v.sizes.map(s => ({
+          size: s.size || '',
+          price: Number(s.price) || 0,
+          stock: Number(s.stock) || 0
+        })) : [],
         description: v.description || '',
         isDefault: v.isDefault || false,
         images: uploadedImages,
@@ -204,9 +212,9 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
         }];
       }
 
-      const variantNames = inputVariants.map(v => (v.name || 'Default').trim().toLowerCase());
+      const variantNames = inputVariants.map((v, index) => (v.color || v.name || (inputVariants.length === 1 ? 'Default' : `Option ${index + 1}`)).trim().toLowerCase());
       if (new Set(variantNames).size !== variantNames.length) {
-        return res.status(400).json({ error: 'Each variant must have a unique name.' });
+        return res.status(400).json({ error: 'Each variant must have a unique name/flavour.' });
       }
 
       for (const v of inputVariants) {
@@ -228,7 +236,8 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
     if (inputVariants !== undefined) {
       const updatedVariants = [];
 
-      for (const v of inputVariants) {
+      for (let index = 0; index < inputVariants.length; index++) {
+        const v = inputVariants[index];
         let uploadedImages = [];
 
         if (v.images && Array.isArray(v.images)) {
@@ -243,10 +252,17 @@ router.put('/update/:id', auth, role.check(ROLES.Admin, ROLES.Merchant, ROLES.Me
           }
         }
 
+        const optionName = v.color || (inputVariants.length === 1 ? 'Default' : `Option ${index + 1}`);
         updatedVariants.push({
-          name: v.name || 'Default',
-          color: v.name || 'Default', // Keep matching color for backward compatibility/legacy clients
+          name: optionName,
+          color: optionName,
           price: Number(v.price) || 0,
+          stock: Number(v.stock) || 0,
+          sizes: Array.isArray(v.sizes) ? v.sizes.map(s => ({
+            size: s.size || '',
+            price: Number(s.price) || 0,
+            stock: Number(s.stock) || 0
+          })) : [],
           description: v.description || '',
           isDefault: v.isDefault || false,
           images: uploadedImages,

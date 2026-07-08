@@ -5,9 +5,11 @@ const { Schema } = Mongoose;
 Mongoose.plugin(slug, { separator: '-', lang: 'en', truncate: 120 });
 
 const VariantSchema = new Schema({
-  name: { type: String, trim: true, required: true },
-  color: { type: String, trim: true }, // Legacy field kept for backward compatibility/migration
-  price: { type: Number, required: true },
+  name: { type: String, trim: true },
+  color: { type: String, trim: true },
+  price: { type: Number },
+  stock: { type: Number, default: 0 },
+  sizes: [{ size: String, stock: Number, price: Number }],
   description: { type: String, trim: true }, // Variant description
   images: [{ type: String }],
   isDefault: { type: Boolean, default: false },
