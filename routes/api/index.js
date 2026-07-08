@@ -3,6 +3,7 @@ const router = require('express').Router();
 const authRoutes = require('./auth');
 const productRoutes = require('./product');
 const categoryRoutes = require('./category');
+const facilityRoutes = require('./facility');
 
 const bannerRoutes = require('./banner');
 
@@ -23,6 +24,9 @@ router.use('/product', productRoutes);
 
 // category routes
 router.use('/category', categoryRoutes);
+
+// facility routes
+router.use('/facility', facilityRoutes);
 
 // brand routes
 // router.use('/brand', brandRoutes);
